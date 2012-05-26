@@ -1,7 +1,7 @@
 Motion Estimation Visualizer
 ----------------------------
 
-This visualizer shows calculated motion vectors (currently just on white background) and created estimated frame from previous frame and motion vectors.
+This visualizer shows calculated motion vectors on the frame and creates estimated frame from previous frame and motion vectors.
 
 Compiling
 ---------
