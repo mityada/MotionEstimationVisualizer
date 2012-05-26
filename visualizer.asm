@@ -20,6 +20,8 @@ section .data
 	extern _process_events
 	extern _draw_line
 	extern _flush
+	extern _load_bitmap
+	extern _draw_bitmap
 
 	extern fopen
 	extern fclose
@@ -86,11 +88,16 @@ _start:
 	call _create_window
 	add esp, 8
 
+	push dword [esp + 12]
+	call _load_bitmap
+	add esp, 4
+
 .loop:
 	call _process_events
 
+	call _draw_bitmap
 	call _redraw
-;.loop:
+
 	jmp .loop
 
 _exit:
