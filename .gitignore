@@ -1,3 +1,7 @@
 visualizer
 *.o
 *.bmp
+*.exe
+*.lib
+*.dll
+*.obj

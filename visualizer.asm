@@ -1,4 +1,4 @@
-section .text
+section .data
 	usage 	db "Usage: visualizer motion_vectors previous_frame.bmp estimated_frame.bmp", 10, 0
 	rb	db "rb", 0
 	wb	db "wb", 0
@@ -13,7 +13,7 @@ section .bss
 	input	resd 1
 	output 	resd 1
 
-section .data
+section .text
 	global _start
 
 	extern _create_window
@@ -83,10 +83,11 @@ _start:
 	call _build
 	add esp, 8
 
+	push _redraw
 	push dword [height]
 	push dword [width]
 	call _create_window
-	add esp, 8
+	add esp, 12
 
 	push dword [esp + 12]
 	call _load_bitmap
@@ -94,10 +95,6 @@ _start:
 
 .loop:
 	call _process_events
-
-	call _draw_bitmap
-	call _redraw
-
 	jmp .loop
 
 _exit:
@@ -108,6 +105,8 @@ _redraw:
 	push ebx
 	push esi
 	push edi
+
+	call _draw_bitmap
 
 	mov esi, 4
 	mov edi, [height]

@@ -4,16 +4,18 @@ section .data
 	rb	db "rb", 0
 
 section .bss
-	display resd 1
-	screen 	resd 1
-	window	resd 1
-	event 	resd 24
-	gc 	resd 1
+	display 	resd 1
+	screen 		resd 1
+	window		resd 1
+	event 		resd 24
+	gc 		resd 1
 
 	bitmap_header	resd 1
 	bitmap_data	resd 1
 
-	pixmap	resd 1
+	pixmap		resd 1
+
+	callback	resd 1
 
 section .text
 	global _create_window
@@ -50,6 +52,9 @@ section .text
 	extern XPutPixel
 
 _create_window:
+	mov eax, [esp + 12]
+	mov [callback], eax
+
 	push 0
 	call XOpenDisplay
 	add esp, 4
@@ -110,22 +115,16 @@ _create_window:
 	jmp .exit
 
 _process_events:
-	;push dword [display]
-	;call XPending
-	;add esp, 4
-	;test eax, eax
-	;jz .exit
-
 	push event
 	push dword [display]
 	call XNextEvent
 	add esp, 8
 
 	cmp dword [event], 12
-	jne _process_events
-	;jmp _process_events
+	jne .return
+	call [callback]
 
-.exit:
+.return:
 	ret
 
 _draw_line:
