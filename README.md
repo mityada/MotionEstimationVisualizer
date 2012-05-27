@@ -6,12 +6,20 @@ This visualizer shows calculated motion vectors on the frame and creates estimat
 Compiling
 ---------
 
+Linux:
 ./compile.sh
+
+Windows (you must have yasm, link, kernel32.lib, user32.lib, gdi32.lib, msvcrt.lib, and maybe something else):
+compile.bat
 
 Usage
 -----
 
 ./visualizer motion_vectors prev_frame.bmp est_frame.bmp
+
+motion_vectors - file with motion vectors
+prev_frame.bmp - bitmap with previous frame
+est_frame.bmp  - file name for estimated frame
 
 Motion Vectors File Format
 --------------------------
