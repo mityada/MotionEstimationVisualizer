@@ -1,5 +1,5 @@
 section .data
-	usage 	db "Usage: visualizer motion_vectors previous_frame.bmp estimated_frame.bmp", 10, 0
+	usage 	db "Usage: visualizer <vectors> <frame>", 10, 0
 	rb	db "rb", 0
 	wb	db "wb", 0
 
@@ -10,17 +10,26 @@ section .bss
 	count 	resd 1
 	coords	resd 1
 
-	input	resd 1
-	output 	resd 1
+	frame	resd 1
+	estimated_frame resd 1
+
+	state	resb 1
 
 section .text
 	global _start
 
+	extern _read_bitmap
+	extern _create_bitmap
+	extern _scale_bitmap
+	extern _get_pixel
+	extern _set_pixel
+
 	extern _create_window
+	extern _get_window_size
+	extern _is_key_pressed
 	extern _process_events
 	extern _draw_line
 	extern _flush
-	extern _load_bitmap
 	extern _draw_bitmap
 
 	extern fopen
@@ -34,7 +43,9 @@ section .text
 	extern exit
 
 _start:
-	cmp dword [esp], 4
+	mov byte [state], 0x01
+
+	cmp dword [esp], 3
 	je .arguments_ok
 	push usage
 	call printf
@@ -78,20 +89,22 @@ _start:
 	call fread
 	add esp, 16
 
-	push dword [esp + 16]
-	push dword [esp + 16]
-	call _build
+	push dword [esp + 12]
+	call _read_bitmap
+	add esp, 4
+	mov [frame], eax
+
+	push dword [coords]
+	push dword [frame]
+	call _build_estimation
 	add esp, 8
+	mov [estimated_frame], eax
 
 	push _redraw
 	push dword [height]
 	push dword [width]
 	call _create_window
 	add esp, 12
-
-	push dword [esp + 12]
-	call _load_bitmap
-	add esp, 4
 
 .loop:
 	call _process_events
@@ -106,7 +119,58 @@ _redraw:
 	push esi
 	push edi
 
+	push "V"
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .v_not_pressed
+	xor byte [state], 0x1
+.v_not_pressed:
+
+	push "E"
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .e_not_pressed
+	xor byte [state], 0x2
+.e_not_pressed:
+
+	sub esp, 8
+	lea eax, [esp + 4]
+	push eax
+	lea eax, [esp + 4]
+	push eax
+	call _get_window_size
+	add esp, 8
+
+	cvtpi2ps xmm0, [esp]
+	add esp, 8
+	mov eax, [frame]
+	cvtpi2ps xmm1, [eax + 4]
+	divps xmm0, xmm1
+	xorps xmm1, xmm1
+	unpcklps xmm0, xmm1
+	movhlps xmm1, xmm0
+	minss xmm0, xmm1
+	sub esp, 4
+	movss [esp], xmm0
+
+	test byte [state], 0x2
+	jz .frame
+	push dword [estimated_frame]
+	jmp .estimated_frame
+.frame:
+	push dword [frame]
+.estimated_frame:
+	call _scale_bitmap
+	add esp, 4
+
+	push eax
 	call _draw_bitmap
+	add esp, 4
+
+	test byte [state], 0x1
+	jz .skip_vectors
 
 	mov esi, 4
 	mov edi, [height]
@@ -116,14 +180,36 @@ _redraw:
 .loop:
 	mov eax, [coords]
 
+	movss xmm0, [esp]
+
 	push edi
 	mov ecx, [eax + ebx * 8 + 4]
 	sub [esp], ecx
+	cvtsi2ss xmm1, [esp]
+	mulss xmm1, xmm0
+	cvttss2si ecx, xmm1
+	mov [esp], ecx
+
 	push esi
 	mov ecx, [eax + ebx * 8]
 	add [esp], ecx
+	cvtsi2ss xmm1, [esp]
+	mulss xmm1, xmm0
+	cvttss2si ecx, xmm1
+	mov [esp], ecx
+
 	push edi
+	cvtsi2ss xmm1, [esp]
+	mulss xmm1, xmm0
+	cvttss2si ecx, xmm1
+	mov [esp], ecx
+
 	push esi
+	cvtsi2ss xmm1, [esp]
+	mulss xmm1, xmm0
+	cvttss2si ecx, xmm1
+	mov [esp], ecx
+
 	call _draw_line
 	add esp, 16
 
@@ -138,6 +224,10 @@ _redraw:
 	cmp ebx, [count]
 	jne .loop
 
+.skip_vectors:
+	add esp, 4
+
+.return:
 	pop edi
 	pop esi
 	pop ebx
@@ -148,161 +238,97 @@ _copy_block:
 	push esi
 	push edi
 
-	mov edi, [esp + 16]
-	mov esi, [esp + 20]
+	mov edi, 8
+.loop_height:
+	dec edi
+	mov esi, 8
+.loop_width:
+	dec esi
 
-	mov ebx, 8
-.loop:
-	push 24
-	push esi
-	push edi
-	call memcpy
+	push dword [esp + 36]
+	add [esp], edi
+	push dword [esp + 36]
+	add [esp], esi
+	push dword [esp + 36]
+	call _get_pixel
 	add esp, 12
 
-	mov eax, [width]
-	mov ecx, 3
-	mul ecx
-	add edi, eax
-	add esi, eax
+	push eax
+	push dword [esp + 28]
+	add [esp], edi
+	push dword [esp + 28]
+	add [esp], esi
+	push dword [esp + 28]
+	call _set_pixel
+	add esp, 16
 
-	dec ebx
-	jnz .loop
+	test esi, esi
+	jnz .loop_width
+
+	test edi, edi
+	jnz .loop_height
 
 	pop edi
 	pop esi
 	pop ebx
 	ret
 
-_build:
+_build_estimation:
 	push ebx
 	push esi
 	push edi
 
-	push rb
-	push dword [esp + 20]
-	call fopen
+	mov eax, [esp + 16]
+	push dword [eax + 8]
+	push dword [eax + 4]
+	call _create_bitmap
 	add esp, 8
-	mov [input], eax
+	mov ebx, eax
 
-	push wb
-	push dword [esp + 24]
-	call fopen
-	add esp, 8
-	mov [output], eax
+	mov eax, [esp + 16]
+	mov edi, [eax + 8]
+	shr edi, 3
+.loop_height:
+	dec edi
+	mov eax, [esp + 16]
+	mov esi, [eax + 4]
+	shr esi, 3
+.loop_width:
+	dec esi
 
-	push 54
-	call malloc
-	add esp, 4
+	mov eax, [esp + 16]
+	mov eax, [eax + 4]
+	shr eax, 3
+	mul edi
+	add eax, esi
 
-	push dword [input]
-	push 54
-	push 1
-	push eax
-	call fread
-	pop eax
-	add esp, 12
+	mov ecx, [esp + 20]
+	mov edx, [ecx + eax * 8 + 4]
+	mov ecx, [ecx + eax * 8]
 
-	push dword [output]
-	push 54
-	push 1
-	push eax
-	call fwrite
-	pop eax
-	add esp, 12
-
-	push eax
-	call free
-	add esp, 4
-
-	mov eax, [width]
-	mov ecx, [height]
-	mul ecx
-	mov ecx, 3
-	mul ecx
-
-	push eax
-	call malloc
-	mov esi, eax
-	call malloc
-	mov edi, eax
-	pop eax
-
-	push dword [input]
-	push eax
-	push 1
+	mov eax, [esp + 16]
+	push edi
+	shl dword [esp], 3
+	add [esp], edx
 	push esi
-	call fread
-	mov eax, [esp + 8]
-	add esp, 16
-
+	shl dword [esp], 3
+	add [esp], ecx
 	push eax
-
-	mov ebx, 0
-	push 0
-	push 0
-.loop:
-	mov eax, [esp]
-	mov [esp + 4], eax
-
-	add [esp], edi
-	add [esp + 4], esi
-
-	mov ecx, [coords]
-	mov eax, [ecx + ebx * 8]
-	mov edx, 3
-	mul edx
-	add [esp + 4], eax
-	mov eax, [ecx + ebx * 8 + 4]
-	mov ecx, [width]
-	mul ecx
-	mov edx, 3
-	mul edx
-	add [esp + 4], eax
-
+	push edi
+	shl dword [esp], 3
+	push esi
+	shl dword [esp], 3
+	push ebx
 	call _copy_block
+	add esp, 24
 
-	sub [esp], edi
-	add dword [esp], 24
-	inc ebx
+	test esi, esi
+	jnz .loop_width
 
-	mov ecx, [width]
-	shr ecx, 3
+	test edi, edi
+	jnz .loop_height
+
 	mov eax, ebx
-	xor edx, edx
-	div ecx
-	test edx, edx
-	jnz .no_row_change
-	mov eax, [width]
-	mov ecx, 21
-	mul ecx
-	add dword [esp], eax
-.no_row_change:
-
-	cmp ebx, [count]
-	jne .loop
-
-	add esp, 8
-
-	pop eax
-
-	push dword [output]
-	push eax
-	push 1
-	push edi
-	call fwrite
-	add esp, 16
-
-	push edi
-	call free
-	add esp, 4
-
-	push esi
-	call free
-	add esp, 4
-
-	push dword [output]
-	call fclose
-	add esp, 4
 
 	pop edi
 	pop esi

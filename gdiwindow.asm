@@ -1,28 +1,25 @@
 section .data
 	class_name	db "MotionEstimationVisualizer", 0
 	window_name	db "Motion Estimation Visualizer", 0
-	rb		db "rb", 0
-	hex	db "%x", 10, 0
-	integer db "%d", 10, 0
 
 section .bss
 	hInstance	resd 1
 	hWnd		resd 1
 	hdc		resd 1
 
-	gdiToken	resd 1
+	keyboard	resb 32
 
-	bitmap_header	resd 1
-	bitmap_data	resd 1
+	gdiToken	resd 1
 
 	callback	resd 1
 
 section .text
 	global _create_window
+	global _get_window_size
+	global _is_key_pressed
 	global _process_events
 	global _draw_line
 	global _flush
-	global _load_bitmap
 	global _draw_bitmap
 
 	extern malloc
@@ -53,6 +50,8 @@ section .text
 	extern __imp__SelectObject@8
 	extern __imp__DeleteObject@4
 	extern __imp__SetDIBitsToDevice@48
+	extern __imp__GetWindowInfo@8
+	extern __imp__InvalidateRect@12
 
 _create_window:
 	push ebx
@@ -135,11 +134,50 @@ _create_window:
 	pop ebx
 	ret
 
+_get_window_size:
+	sub esp, 60
+	mov dword [esp], 60
+	push esp
+	push dword [hWnd]
+	call [__imp__GetWindowInfo@8]
+
+	mov ecx, [esp + 12]
+	sub ecx, [esp + 4]
+	mov edx, [esp + 16]
+	sub edx, [esp + 8]
+
+	add esp, 60
+
+	mov eax, [esp + 4]
+	mov [eax], ecx
+	mov eax, [esp + 8]
+	mov [eax], edx
+
+	ret
+
+_is_key_pressed:
+        mov ecx, [esp + 4]
+        and ecx, 0x000000ff
+        mov edx, ecx
+        shr edx, 3
+        and cl, 0x07
+        mov eax, 0x1
+        shl eax, cl
+        test [edx + keyboard], al
+        jnz .pressed
+        xor eax, eax
+        ret
+.pressed:
+        xor [edx + keyboard], al
+        ret
+
 _wndproc:
 	push ebx
 
 	cmp dword [esp + 12], 0x000F	; WM_PAINT
 	je .wm_paint
+	cmp dword [esp + 12], 0x0100	; WM_KEYDOWN
+	je .wm_keydown
 	cmp dword [esp + 12], 0x0002	; WM_QUIT
 	je .wm_quit
 	jmp .default
@@ -180,6 +218,23 @@ _wndproc:
 	push ebx
 	call free
 	add esp, 4
+
+	jmp .return
+
+.wm_keydown:
+	mov eax, [esp + 16]
+
+	mov ecx, eax
+        shr eax, 3
+        and cl, 0x07
+        mov edx, 1
+        shl edx, cl
+        or [eax + keyboard], dl
+
+	push 0
+	push 0
+	push dword [hWnd]
+	call [__imp__InvalidateRect@12]
 
 	jmp .return
 
@@ -238,54 +293,13 @@ _draw_line:
 _flush:
 	ret
 
-_load_bitmap:
-	push rb
-	push dword [esp + 8]
-	call fopen
-	add esp, 8
-	push eax
-
-	push 40
-	call malloc
-	add esp, 4
-	mov [bitmap_header], eax
-
-	push 14
-	push 1
-	push eax
-	call fread
-	mov dword [esp + 8], 40
-	call fread
-	add esp, 12
-
-	mov ecx, [bitmap_header]
-	mov eax, [ecx + 4]
-	mov edx, [ecx + 8]
-	mul edx
-	lea eax, [eax + eax * 2]
-
-	push eax
-	call malloc
-	mov [bitmap_data], eax
-
-	push 1
-	push eax
-	call fread
-	add esp, 12
-
-	call fclose
-	add esp, 4
-
-	ret
-
 _draw_bitmap:
-	cmp dword [bitmap_header], 0
-	je .return
+	mov eax, [esp + 4]
 
 	push 0				; fuColorsUse = DIB_RGB_COLORS
-	push dword [bitmap_header]	; lpbmi
-	push dword [bitmap_data]	; lpvBits
-	mov eax, [bitmap_header]
+	push eax			; lpbmi
+	push eax			; lpvBits
+	add dword [esp], 40
 	push dword [eax + 8]		; cScanLines
 	push 0				; uStartScan
 	push 0				; YSrc

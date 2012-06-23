@@ -1,7 +1,12 @@
 section .data
-	tst	db "%d", 10, 0
-	mask 	db "%x", 10, "%x", 10, "%x", 10, 0
-	rb	db "rb", 0
+	keycodes db 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x26, 0x38, 0x36, 0x28, 0x1a, 0x29, 0x2a, 0x2b, 0x1f, 0x2c, 0x2d, 0x2e, 0x3a, 0x39, 0x20
+		 db	0x21, 0x18, 0x1b, 0x27, 0x1c, 0x1e, 0x37, 0x19, 0x35, 0x1d, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+		 db	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 section .bss
 	display 	resd 1
@@ -10,8 +15,7 @@ section .bss
 	event 		resd 24
 	gc 		resd 1
 
-	bitmap_header	resd 1
-	bitmap_data	resd 1
+	keyboard	resb 32
 
 	pixmap		resd 1
 
@@ -19,14 +23,16 @@ section .bss
 
 section .text
 	global _create_window
+	global _get_window_size
+	global _is_key_pressed
 	global _process_events
 	global _draw_line
 	global _flush
-	global _load_bitmap
 	global _draw_bitmap
 
 	extern malloc
 	extern free
+	extern memcpy
 
 	extern fopen
 	extern fclose
@@ -36,8 +42,10 @@ section .text
 
 	extern XOpenDisplay
 	extern XCreateSimpleWindow
+	extern XGetWindowAttributes
 	extern XSelectInput
 	extern XMapWindow
+	extern XResizeWindow
 	extern XCreateGC
 	extern XSetForeground
 	extern XPending
@@ -50,6 +58,10 @@ section .text
 	extern XPutImage
 	extern XCopyArea
 	extern XPutPixel
+
+	extern _read_bitmap
+	extern _write_bitmap
+	extern _scale_bitmap
 
 _create_window:
 	mov eax, [esp + 12]
@@ -80,7 +92,7 @@ _create_window:
 	add esp, 9 * 4
 	mov [window], eax
 
-	push 1 << 15			; Expose
+	push 1 << 0 | 1 << 15		; KeyPressMask | ExposureMask
 	push eax			; window
 	push dword [display]		; display
 	call XSelectInput
@@ -106,13 +118,48 @@ _create_window:
 	call XSetForeground
 	add esp, 12
 
-.exit:
+.return:
+	xor eax, eax
 	ret
 
 .error:
 	xor eax, eax
 	inc eax
-	jmp .exit
+	ret
+
+_get_window_size:
+	sub esp, 23 * 4
+	push esp
+	push dword [window]
+	push dword [display]
+	call XGetWindowAttributes
+	add esp, 12
+	mov ecx, [esp + 8]
+	mov edx, [esp + 12]
+	add esp, 23 * 4
+	mov eax, [esp + 4]
+	mov [eax], ecx
+	mov eax, [esp + 8]
+	mov [eax], edx
+	ret
+
+_is_key_pressed:
+	xor ecx, ecx
+	mov ecx, [esp + 4]
+	mov cl, [ecx + keycodes]
+	and ecx, 0x000000ff
+	mov edx, ecx
+	shr edx, 3
+	and cl, 0x07
+	mov eax, 0x1
+	shl eax, cl
+	test [edx + keyboard], al
+	jnz .pressed
+	xor eax, eax
+	ret
+.pressed:
+	xor [edx + keyboard], al
+	ret
 
 _process_events:
 	push event
@@ -120,7 +167,21 @@ _process_events:
 	call XNextEvent
 	add esp, 8
 
-	cmp dword [event], 12
+	cmp dword [event], 2	; KeyPress
+	jne .not_keypress
+	mov eax, [event + 13 * 4]
+
+	mov ecx, eax
+	shr eax, 3
+	and cl, 0x07
+	mov edx, 1
+	shl edx, cl
+	or [eax + keyboard], dl
+
+	call [callback]
+
+.not_keypress:
+	cmp dword [event], 12	; Expose
 	jne .return
 	call [callback]
 
@@ -145,108 +206,50 @@ _flush:
 	add esp, 4
 	ret
 
-_load_bitmap:
+_draw_bitmap:
 	push ebx
+	push esi
+	push edi
 
-	push rb
-	push dword [esp + 12]
-	call fopen
-	add esp, 8
-	push eax
-
-	push 40
-	call malloc
-	add esp, 4
-	mov [bitmap_header], eax
-
-	push 14
-	push 1
-	push eax
-	call fread
-	mov dword [esp + 8], 40
-	call fread
-	add esp, 12
-
-	mov ecx, [bitmap_header]
-	mov eax, [ecx + 4]
-	mov edx, [ecx + 8]
-	mul edx
-	lea eax, [eax + eax * 2]
-
-	push eax
-	call malloc
-	mov [bitmap_data], eax
-
-	push 1
-	push eax
-	call fread
-	add esp, 12
-
-	call fclose
-	add esp, 4
-
-	mov ecx, [bitmap_header]
-	mov eax, [ecx + 4]
-	mov edx, [ecx + 8]
-	mul edx
-	shl eax, 2
+	mov ecx, [esp + 16]
+	mov esi, [ecx + 4]
+	shl esi, 2
+	mov edi, [ecx + 8]
+	mov eax, esi
+	mul edi
 	push eax
 	call malloc
 	pop ecx
-	push eax
 	add eax, ecx
-	shr ecx, 2
-
-	mov ebx, [bitmap_header]
-	mov ebx, [ebx + 4]
-	shl ebx, 2
-	sub eax, ebx
-
-	mov edx, [bitmap_data]
+	mov edx, [esp + 16]
+	add edx, 40
 
 .loop:
-	mov ebx, [edx]
-	mov [eax], ebx
-	;and dword [eax], 0x00ffffff
-	add eax, 4
-	add edx, 3
-	dec ecx
+	sub eax, esi
+
+	push esi
 	push edx
 	push eax
-	mov eax, ecx
-	mov ebx, [bitmap_header]
-	mov ebx, [ebx + 4]
-	xor edx, edx
-	div ebx
-	test edx, edx
+	call memcpy
 	pop eax
 	pop edx
-	jnz .no_row_change
-	shl ebx, 3
-	sub eax, ebx
-.no_row_change:
-	test ecx, ecx
-	jnz .loop
-
-	push dword [bitmap_data]
-	call free
 	add esp, 4
 
-	pop eax
-	mov [bitmap_data], eax
+	add edx, esi
+	dec edi
+	jnz .loop
 
-	mov ecx, [bitmap_header]
-	mov eax, [ecx + 4]
-	shl eax, 2
-	push eax	; bytes_per_line
-	push 32	; bitmap_pad
-	mov eax, [bitmap_header]
-	push dword [eax + 8]	; height
-	push dword [eax + 4]	; width
-	push dword [bitmap_data]
-	push 0	; offset
-	push 2	; format = ZPixmap
-	push 24	; depth
+	mov ecx, [esp + 16]
+	mov edx, [ecx + 4]
+	shl edx, 2
+	push edx			; bytes_per_line
+	push 32				; bitmap_pad
+	push dword [ecx + 8]		; height
+	push dword [ecx + 4]		; width
+	push eax			; bitmap data
+	push 0				; offset
+	push 2				; format = ZPixmap
+	push 24				; depth
 	mov eax, [screen]
 	push dword [eax + 10 * 4]	; visual
 	push dword [display]		; display
@@ -254,47 +257,46 @@ _load_bitmap:
 	add esp, 10 * 4
 	push eax
 
-	push 24	; depth
-	mov eax, [bitmap_header]
-	push dword [eax + 8]	; height
-	push dword [eax + 4]	; width
-	push dword [window]	; drawable
-	push dword [display]	; display
+	push 24				; depth
+	mov eax, [esp + 24]
+	push dword [eax + 8]		; height
+	push dword [eax + 4]		; width
+	push dword [window]		; drawable
+	push dword [display]		; display
 	call XCreatePixmap
 	add esp, 5 * 4
 	mov [pixmap], eax
 
 	pop eax
-	mov ecx, [bitmap_header]
-	push dword [ecx + 8]	; height
-	push dword [ecx + 4]	; width
-	push 0	; dest_y
-	push 0	; dest_x
-	push 0	; src_y
-	push 0	; src_x
-	push eax	; image
-	push dword [gc]	; gc
-	push dword [pixmap]	; drawable
-	push dword [display]	; display
+	mov ecx, [esp + 16]
+	push dword [ecx + 8]		; height
+	push dword [ecx + 4]		; width
+	push 0				; dest_y
+	push 0				; dest_x
+	push 0				; src_y
+	push 0				; src_x
+	push eax			; image
+	push dword [gc]			; gc
+	push dword [pixmap]		; drawable
+	push dword [display]		; display
 	call XPutImage
 	add esp, 10 * 4
 
-	pop ebx
-	ret
-
-_draw_bitmap:
-	push 0	; dest_y
-	push 0	; dest_x
-	mov eax, [bitmap_header]
-	push dword [eax + 8]	; height
-	push dword [eax + 4]	; width
-	push 0	; src_y
-	push 0	; src_x
-	push dword [gc]	; gc
-	push dword [window]	; dest
-	push dword [pixmap]	; src
-	push dword [display]	; display
+	push 0				; dest_y
+	push 0				; dest_x
+	mov eax, [esp + 24]
+	push dword [eax + 8]		; height
+	push dword [eax + 4]		; width
+	push 0				; src_y
+	push 0				; src_x
+	push dword [gc]			; gc
+	push dword [window]		; dest
+	push dword [pixmap]		; src
+	push dword [display]		; display
 	call XCopyArea
 	add esp, 10 * 4
 
+	pop edi
+	pop esi
+	pop ebx
 	ret
