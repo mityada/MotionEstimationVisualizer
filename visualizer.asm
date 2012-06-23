@@ -1,5 +1,6 @@
 section .data
 	usage 	db "Usage: visualizer <vectors> <frame>", 10, 0
+	error	db "Error: %s", 10, 0
 	rb	db "rb", 0
 	wb	db "wb", 0
 
@@ -23,6 +24,7 @@ section .text
 	extern _scale_bitmap
 	extern _get_pixel
 	extern _set_pixel
+	extern _get_last_bitmap_error
 
 	extern _create_window
 	extern _get_window_size
@@ -92,6 +94,18 @@ _start:
 	push dword [esp + 12]
 	call _read_bitmap
 	add esp, 4
+	test eax, eax
+	jnz .frame_read
+
+	call _get_last_bitmap_error
+	push eax
+	push error
+	call printf
+	add esp, 8
+
+	jmp _exit
+
+.frame_read:
 	mov [frame], eax
 
 	push dword [coords]

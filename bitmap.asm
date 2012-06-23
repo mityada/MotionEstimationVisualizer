@@ -2,8 +2,11 @@ section .data
 	mode_read db "rb", 0
 	mode_write db "wb", 0
 
-	SEEK_SET equ 0
-	SEEK_CUR equ 1
+	file_open_error		db "Cannot open file ", 34, "%s", 34, 0
+	file_format_error	db "Invalid file format (%s)", 0
+
+section .bss
+	last_error resb 1024
 
 section .text
 	global _read_bitmap
@@ -12,6 +15,7 @@ section .text
 	global _scale_bitmap
 	global _get_pixel
 	global _set_pixel
+	global _get_last_bitmap_error
 
 	extern fopen
 	extern fclose
@@ -23,7 +27,7 @@ section .text
 	extern free
 	extern memcpy
 
-	extern printf
+	extern sprintf
 
 _read_bitmap:
 	mov eax, [esp + 4]
@@ -31,9 +35,17 @@ _read_bitmap:
 	push eax
 	call fopen
 	add esp, 8
-
 	test eax, eax
-	jz .error
+	jnz .opened
+
+	push dword [esp + 4]
+	push file_open_error
+	push last_error
+	call sprintf
+	add esp, 12
+
+	jmp .error
+.opened:
 
 	push eax
 
@@ -50,7 +62,23 @@ _read_bitmap:
 	add esp, 12
 
 	cmp word [eax], "BM"		; file type
-	jne .error
+	je .valid_type
+
+	push eax
+	call free
+	add esp, 4
+
+	push dword [esp + 8]
+	push file_format_error
+	push last_error
+	call sprintf
+	add esp, 12
+
+	call fclose
+	add esp, 4
+
+	jmp .error
+.valid_type:
 
 	push dword [eax + 10]		; pixel array
 
@@ -72,7 +100,22 @@ _read_bitmap:
 
 	cmp dword [eax + 16], 0		; compression
 	je .no_compression
-	add esp, 8
+
+	add esp, 4
+
+	push eax
+	call free
+	add esp, 4
+
+	push dword [esp + 8]
+	push file_format_error
+	push last_error
+	call sprintf
+	add esp, 12
+
+	call fclose
+	add esp, 4
+
 	jmp .error
 .no_compression:
 	cmp word [eax + 14], 8
@@ -81,13 +124,28 @@ _read_bitmap:
 	je .valid_bpp
 	cmp word [eax + 14], 32
 	je .valid_bpp
-	add esp, 8
+
+	add esp, 4
+
+	push eax
+	call free
+	add esp, 4
+
+	push dword [esp + 8]
+	push file_format_error
+	push last_error
+	call sprintf
+	add esp, 12
+
+	call fclose
+	add esp, 4
+
 	jmp .error
 .valid_bpp:
 
 	push eax
 
-	push SEEK_SET
+	push 0
 	push dword [esp + 8]
 	push dword [esp + 16]
 	call fseek
@@ -490,4 +548,8 @@ _set_pixel:
 	mov edx, [esp + 16]
 	mov [ecx + eax + 40], edx
 .return:
+	ret
+
+_get_last_bitmap_error:
+	mov eax, last_error
 	ret
