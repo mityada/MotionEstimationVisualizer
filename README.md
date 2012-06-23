@@ -1,7 +1,7 @@
 Motion Estimation Visualizer
 ----------------------------
 
-This visualizer shows calculated motion vectors on the frame and creates estimated frame from previous frame and motion vectors.
+This visualizer shows calculated motion vectors on the frame and/or estimated frame.
 
 Compiling
 ---------
@@ -15,11 +15,13 @@ compile.bat
 Usage
 -----
 
-./visualizer motion_vectors prev_frame.bmp est_frame.bmp
+./visualizer vectors frame
 
-motion_vectors - file with motion vectors
-prev_frame.bmp - bitmap with previous frame
-est_frame.bmp  - file name for estimated frame
+vectors - file with motion vectors
+frame - bitmap with frame
+
+V key turns display of motion vectors on/off.
+E key toggles between frame and estimated frame.
 
 Motion Vectors File Format
 --------------------------
@@ -32,4 +34,4 @@ Each motion vector consists of 8 bytes. First 4 bytes is x coordinate, last 4 by
 BMP Format
 ----------
 
-Visualizer supports uncompressed 24-bit BMP.
+Visualizer supports uncompressed 8-bit, 24-bit or 32-bit BMP.
