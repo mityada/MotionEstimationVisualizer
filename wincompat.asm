@@ -16,6 +16,7 @@ section .text
 	global fwrite
 	global fseek
 	global printf
+	global sprintf
 	global exit
 
 	extern _start
@@ -30,7 +31,7 @@ section .text
 	extern _fwrite
 	extern _fseek
 	extern _printf
-	extern _wprintf
+	extern _sprintf
 	extern _exit
 
 	extern __imp__GetCommandLineA@0
@@ -152,6 +153,9 @@ fseek:
 
 printf:
 	jmp _printf
+
+sprintf:
+	jmp _sprintf
 
 exit:
 	jmp _exit
