@@ -210,7 +210,7 @@ _redraw:
 	xor byte [state], 0x2
 .e_not_pressed:
 
-	push ","
+	push "K"
 	call _is_key_pressed
 	add esp, 4
 	test eax, eax
@@ -220,7 +220,7 @@ _redraw:
 	dec dword [current_frame]
 .comma_not_pressed:
 
-	push "."
+	push "L"
 	call _is_key_pressed
 	add esp, 4
 	test eax, eax
