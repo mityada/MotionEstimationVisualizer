@@ -1,7 +1,10 @@
 section .data
 	usage 	db "Usage: visualizer <vectors> <frame>", 10, 0
 	error	db "Error: %s", 10, 0
+	integer db "%d", 10, 0
+	string	db "%s", 10, 0
 	rb	db "rb", 0
+	rt	db "rt", 0
 	wb	db "wb", 0
 
 section .bss
@@ -11,8 +14,10 @@ section .bss
 	count 	resd 1
 	coords	resd 1
 
-	frame	resd 1
-	estimated_frame resd 1
+	frame_count		resd 1
+	frames			resd 1
+	estimated_frames 	resd 1
+	current_frame		resd 1
 
 	state	resb 1
 
@@ -42,10 +47,12 @@ section .text
 	extern memcpy
 	extern free
 	extern printf
+	extern fscanf
 	extern exit
 
 _start:
 	mov byte [state], 0x01
+	mov dword [current_frame], 0
 
 	cmp dword [esp], 3
 	je .arguments_ok
@@ -91,9 +98,53 @@ _start:
 	call fread
 	add esp, 16
 
-	push dword [esp + 12]
-	call _read_bitmap
+	push rt
+	push dword [esp + 16]
+	call fopen
+	add esp, 8
+
+	test eax, eax
+	jnz .frames_opened
+	jmp _exit
+.frames_opened:
+
+	push frame_count
+	push integer
+	push eax
+	call fscanf
+	pop eax
+	add esp, 8
+
+	push eax
+
+	push dword [frame_count]
+	shl dword [esp], 2
+	call malloc
+	mov [frames], eax
+	call malloc
+	mov [estimated_frames], eax
 	add esp, 4
+
+	push dword [frame_count]
+
+.frames_loop:
+	push 1024
+	call malloc
+	add esp, 4
+
+	push eax
+	push string
+	push dword [esp + 12]
+	call fscanf
+	add esp, 8
+
+	call _read_bitmap
+	pop ecx
+	push eax
+	push ecx
+	call free
+	add esp, 4
+	pop eax
 	test eax, eax
 	jnz .frame_read
 
@@ -106,13 +157,23 @@ _start:
 	jmp _exit
 
 .frame_read:
-	mov [frame], eax
+	mov ecx, [frame_count]
+	sub ecx, [esp]
+	mov edx, [frames]
+	mov [edx + ecx * 4], eax
 
 	push dword [coords]
-	push dword [frame]
+	push eax
 	call _build_estimation
 	add esp, 8
-	mov [estimated_frame], eax
+
+	mov ecx, [frame_count]
+	sub ecx, [esp]
+	mov edx, [estimated_frames]
+	mov [edx + ecx * 4], eax
+
+	dec dword [esp]
+	jnz .frames_loop
 
 	push _redraw
 	push dword [height]
@@ -149,6 +210,28 @@ _redraw:
 	xor byte [state], 0x2
 .e_not_pressed:
 
+	push ","
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .comma_not_pressed
+	cmp dword [current_frame], 0
+	je .comma_not_pressed
+	dec dword [current_frame]
+.comma_not_pressed:
+
+	push "."
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .point_not_pressed
+	mov eax, [frame_count]
+	sub eax, 2
+	cmp dword [current_frame], eax
+	jge .point_not_pressed
+	inc dword [current_frame]
+.point_not_pressed:
+
 	sub esp, 8
 	lea eax, [esp + 4]
 	push eax
@@ -159,7 +242,8 @@ _redraw:
 
 	cvtpi2ps xmm0, [esp]
 	add esp, 8
-	mov eax, [frame]
+	mov eax, [frames]
+	mov eax, [eax]
 	cvtpi2ps xmm1, [eax + 4]
 	divps xmm0, xmm1
 	xorps xmm1, xmm1
@@ -171,11 +255,13 @@ _redraw:
 
 	test byte [state], 0x2
 	jz .frame
-	push dword [estimated_frame]
+	mov eax, [estimated_frames]
 	jmp .estimated_frame
 .frame:
-	push dword [frame]
+	mov eax, [frames]
 .estimated_frame:
+	mov ecx, [current_frame]
+	push dword [eax + ecx * 4]
 	call _scale_bitmap
 	add esp, 4
 
