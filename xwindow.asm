@@ -53,7 +53,9 @@ section .text
 	extern XFlush
 	extern XDrawLine
 	extern XCreateImage
+	extern XDestroyImage
 	extern XCreatePixmap
+	extern XFreePixmap
 	extern XGetImage
 	extern XPutImage
 	extern XCopyArea
@@ -280,7 +282,9 @@ _draw_bitmap:
 	push dword [pixmap]		; drawable
 	push dword [display]		; display
 	call XPutImage
-	add esp, 10 * 4
+	add esp, 3 * 4
+	call XDestroyImage
+	add esp, 7 * 4
 
 	push 0				; dest_y
 	push 0				; dest_x
@@ -294,6 +298,7 @@ _draw_bitmap:
 	push dword [pixmap]		; src
 	push dword [display]		; display
 	call XCopyArea
+	call XFreePixmap
 	add esp, 10 * 4
 
 	pop edi
