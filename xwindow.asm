@@ -286,8 +286,8 @@ _draw_bitmap:
 	call XDestroyImage
 	add esp, 7 * 4
 
-	push 0				; dest_y
-	push 0				; dest_x
+	push dword [esp + 24]		; dest_y
+	push dword [esp + 24]		; dest_x
 	mov eax, [esp + 24]
 	push dword [eax + 8]		; height
 	push dword [eax + 4]		; width

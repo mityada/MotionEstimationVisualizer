@@ -275,7 +275,7 @@ _redraw:
 	add esp, 8
 
 	cvtpi2ps xmm0, [esp]
-	add esp, 8
+;	add esp, 8
 	mov eax, [frames]
 	mov eax, [eax]
 	cvtpi2ps xmm1, [eax + 4]
@@ -299,9 +299,18 @@ _redraw:
 	call _scale_bitmap
 	add esp, 4
 
+	push dword [esp + 8]
+	mov ecx, [eax + 8]
+	sub [esp], ecx
+	shr dword [esp], 1
+	push dword [esp + 8]
+	mov ecx, [eax + 4]
+	sub [esp], ecx
+	shr dword [esp], 1
 	push eax
 	call _draw_bitmap
 	add esp, 4
+;	add esp, 8
 
 	test byte [state], 0x1
 	jz .skip_vectors
@@ -316,7 +325,7 @@ _redraw:
 	mov ecx, [current_frame]
 	mov eax, [eax + ecx * 4]
 
-	movss xmm0, [esp]
+	movss xmm0, [esp + 8]
 
 	push edi
 	mov ecx, [eax + ebx * 8 + 4]
@@ -325,6 +334,8 @@ _redraw:
 	mulss xmm1, xmm0
 	cvttss2si ecx, xmm1
 	mov [esp], ecx
+	mov ecx, [esp + 8]
+	add [esp], ecx
 
 	push esi
 	mov ecx, [eax + ebx * 8]
@@ -333,18 +344,24 @@ _redraw:
 	mulss xmm1, xmm0
 	cvttss2si ecx, xmm1
 	mov [esp], ecx
+	mov ecx, [esp + 8]
+	add [esp], ecx
 
 	push edi
 	cvtsi2ss xmm1, [esp]
 	mulss xmm1, xmm0
 	cvttss2si ecx, xmm1
 	mov [esp], ecx
+	mov ecx, [esp + 16]
+	add [esp], ecx
 
 	push esi
 	cvtsi2ss xmm1, [esp]
 	mulss xmm1, xmm0
 	cvttss2si ecx, xmm1
 	mov [esp], ecx
+	mov ecx, [esp + 16]
+	add [esp], ecx
 
 	call _draw_line
 	add esp, 16
@@ -361,7 +378,11 @@ _redraw:
 	jne .loop
 
 .skip_vectors:
+	add esp, 8
+
 	add esp, 4
+
+	add esp, 8
 
 .return:
 	pop edi

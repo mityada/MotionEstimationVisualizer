@@ -295,6 +295,8 @@ _flush:
 
 _draw_bitmap:
 	mov eax, [esp + 4]
+	mov ecx, [esp + 8]
+	mov edx, [esp + 12]
 
 	push 0				; fuColorsUse = DIB_RGB_COLORS
 	push eax			; lpbmi
@@ -306,8 +308,8 @@ _draw_bitmap:
 	push 0				; XSrc
 	push dword [eax + 8]		; dwHeight
 	push dword [eax + 4]		; dwWidth
-	push 0				; YDest
-	push 0				; XDest
+	push edx			; YDest
+	push ecx			; XDest
 	push dword [hdc]		; hdc
 	call [__imp__SetDIBitsToDevice@48]
 
