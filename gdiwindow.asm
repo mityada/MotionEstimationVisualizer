@@ -141,10 +141,10 @@ _get_window_size:
 	push dword [hWnd]
 	call [__imp__GetWindowInfo@8]
 
-	mov ecx, [esp + 12]
-	sub ecx, [esp + 4]
-	mov edx, [esp + 16]
-	sub edx, [esp + 8]
+	mov ecx, [esp + 28]
+	sub ecx, [esp + 20]
+	mov edx, [esp + 32]
+	sub edx, [esp + 24]
 
 	add esp, 60
 
