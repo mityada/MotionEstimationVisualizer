@@ -1,5 +1,5 @@
 section .data
-	usage 	db "Usage: visualizer <vectors> <frame>", 10, 0
+	usage 	db "Usage: visualizer <vectors> <frames>", 10, 0
 	error	db "Error: %s", 10, 0
 	integer db "%d", 10, 0
 	string	db "%s", 10, 0
@@ -71,32 +71,60 @@ _start:
 	mov [file], eax
 
 	push dword [file]
+	push 1
+	push 4
+	push frame_count
+	call fread
+	add esp, 16
+
+	push dword [frame_count]
+	dec dword [esp]
+	shl dword [esp], 2
+	call malloc
+	add esp, 4
+	mov [coords], eax
+
+	push dword [file]
 	push 2
 	push 4
 	push width
 	call fread
 	add esp, 16
 
+	push 0	; frame
+
 	mov eax, [width]
 	shr eax, 3
 	mov ecx, [height]
 	mul ecx
-
 	push eax
+
+	shr eax, 3
+	mov [count], eax
+
+.loop_coords:
 	call malloc
-	mov [coords], eax
-	pop eax
-	shr eax, 2
-	mov ecx, eax
-	shr ecx, 1
-	mov [count], ecx
+	mov ecx, [esp + 4]
+	mov edx, [coords]
+	mov [edx + ecx * 4], eax
+
+	mov ecx, [esp]
+	shr ecx, 2
 
 	push dword [file]
-	push eax
+	push ecx
 	push 4
-	push dword [coords]
+	push eax
 	call fread
 	add esp, 16
+
+	inc dword [esp + 4]
+	mov eax, [frame_count]
+	dec eax
+	cmp dword [esp + 4], eax
+	jl .loop_coords
+
+	add esp, 8
 
 	push rt
 	push dword [esp + 16]
@@ -162,11 +190,17 @@ _start:
 	mov edx, [frames]
 	mov [edx + ecx * 4], eax
 
-	push dword [coords]
+	mov edx, [frame_count]
+	dec edx
+	cmp ecx, edx
+	je .no_estimation
+	mov edx, [coords]
+	push dword [edx + ecx * 4]
 	push eax
 	call _build_estimation
 	add esp, 8
 
+.no_estimation:
 	mov ecx, [frame_count]
 	sub ecx, [esp]
 	mov edx, [estimated_frames]
@@ -279,6 +313,8 @@ _redraw:
 
 .loop:
 	mov eax, [coords]
+	mov ecx, [current_frame]
+	mov eax, [eax + ecx * 4]
 
 	movss xmm0, [esp]
 
