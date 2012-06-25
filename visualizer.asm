@@ -275,7 +275,6 @@ _redraw:
 	add esp, 8
 
 	cvtpi2ps xmm0, [esp]
-;	add esp, 8
 	mov eax, [frames]
 	mov eax, [eax]
 	cvtpi2ps xmm1, [eax + 4]
@@ -310,7 +309,6 @@ _redraw:
 	push eax
 	call _draw_bitmap
 	add esp, 4
-;	add esp, 8
 
 	test byte [state], 0x1
 	jz .skip_vectors

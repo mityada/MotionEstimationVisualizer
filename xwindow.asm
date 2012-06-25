@@ -12,12 +12,11 @@ section .bss
 	display 	resd 1
 	screen 		resd 1
 	window		resd 1
+	buffer		resd 1
 	event 		resd 24
 	gc 		resd 1
 
 	keyboard	resb 32
-
-	pixmap		resd 1
 
 	callback	resd 1
 
@@ -60,6 +59,11 @@ section .text
 	extern XPutImage
 	extern XCopyArea
 	extern XPutPixel
+
+	extern XdbeAllocateBackBufferName
+	extern XdbeBeginIdiom
+	extern XdbeEndIdiom
+	extern XdbeSwapBuffers
 
 	extern _read_bitmap
 	extern _write_bitmap
@@ -119,6 +123,13 @@ _create_window:
 	push dword [display]
 	call XSetForeground
 	add esp, 12
+
+	push 1
+	push dword [window]
+	push dword [display]
+	call XdbeAllocateBackBufferName
+	add esp, 12
+	mov [buffer], eax
 
 .return:
 	xor eax, eax
@@ -180,12 +191,33 @@ _process_events:
 	shl edx, cl
 	or [eax + keyboard], dl
 
-	call [callback]
+	jmp .expose
 
 .not_keypress:
 	cmp dword [event], 12	; Expose
 	jne .return
+.expose:
+	push dword [display]
+	call XdbeBeginIdiom
+	add esp, 4
+
 	call [callback]
+
+	push 1
+	push dword [window]
+	mov eax, esp
+
+	push 1
+	push eax
+	push dword [display]
+	call XdbeSwapBuffers
+	add esp, 12
+
+	add esp, 8
+
+	push dword [display]
+	call XdbeEndIdiom
+	add esp, 4
 
 .return:
 	ret
@@ -196,7 +228,7 @@ _draw_line:
 	push dword [esp + 16]
 	push dword [esp + 16]
 	push dword [gc]
-	push dword [window]
+	push dword [buffer]
 	push dword [display]
 	call XDrawLine
 	add esp, 7 * 4
@@ -259,47 +291,22 @@ _draw_bitmap:
 	add esp, 10 * 4
 	push eax
 
-	push 24				; depth
-	mov eax, [esp + 24]
-	push dword [eax + 8]		; height
-	push dword [eax + 4]		; width
-	push dword [window]		; drawable
-	push dword [display]		; display
-	call XCreatePixmap
-	add esp, 5 * 4
-	mov [pixmap], eax
-
 	pop eax
 	mov ecx, [esp + 16]
 	push dword [ecx + 8]		; height
 	push dword [ecx + 4]		; width
-	push 0				; dest_y
-	push 0				; dest_x
+	push dword [esp + 32]		; dest_y
+	push dword [esp + 32]		; dest_x
 	push 0				; src_y
 	push 0				; src_x
 	push eax			; image
 	push dword [gc]			; gc
-	push dword [pixmap]		; drawable
+	push dword [buffer]		; drawable
 	push dword [display]		; display
 	call XPutImage
 	add esp, 3 * 4
 	call XDestroyImage
 	add esp, 7 * 4
-
-	push dword [esp + 24]		; dest_y
-	push dword [esp + 24]		; dest_x
-	mov eax, [esp + 24]
-	push dword [eax + 8]		; height
-	push dword [eax + 4]		; width
-	push 0				; src_y
-	push 0				; src_x
-	push dword [gc]			; gc
-	push dword [window]		; dest
-	push dword [pixmap]		; src
-	push dword [display]		; display
-	call XCopyArea
-	call XFreePixmap
-	add esp, 10 * 4
 
 	pop edi
 	pop esi
