@@ -23,9 +23,9 @@ frames - file with description of frames
 
 V key turns display of motion vectors on/off.
 
-E key toggles between frame and estimated frame.
+1 - show first frame in pair. 2 - show second frame in pair. 3 - show estimated second frame.
 
-Displayed frame can be selected with keys K and L.
+Displayed frame pair can be selected with keys K and L.
 
 Motion Vectors File Format
 --------------------------

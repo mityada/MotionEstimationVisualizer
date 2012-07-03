@@ -20,6 +20,7 @@ section .bss
 	current_frame		resd 1
 
 	state	resb 1
+	vectors	resb 1
 
 section .text
 	global _start
@@ -52,6 +53,7 @@ section .text
 
 _start:
 	mov byte [state], 0x01
+	mov byte [vectors], 0x01
 	mov dword [current_frame], 0
 
 	cmp dword [esp], 3
@@ -233,38 +235,54 @@ _redraw:
 	add esp, 4
 	test eax, eax
 	jz .v_not_pressed
-	xor byte [state], 0x1
+	xor byte [vectors], 0x1
 .v_not_pressed:
 
-	push "E"
+	push "1"
 	call _is_key_pressed
 	add esp, 4
 	test eax, eax
-	jz .e_not_pressed
-	xor byte [state], 0x2
-.e_not_pressed:
+	jz .1_not_pressed
+	mov byte [state], 0x1
+.1_not_pressed:
+
+	push "2"
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .2_not_pressed
+	mov byte [state], 0x2
+.2_not_pressed:
+
+	push "3"
+	call _is_key_pressed
+	add esp, 4
+	test eax, eax
+	jz .3_not_pressed
+	mov byte [state], 0x3
+.3_not_pressed:
 
 	push "K"
 	call _is_key_pressed
 	add esp, 4
 	test eax, eax
-	jz .comma_not_pressed
+	jz .k_not_pressed
 	cmp dword [current_frame], 0
-	je .comma_not_pressed
+	je .k_not_pressed
 	dec dword [current_frame]
-.comma_not_pressed:
+.k_not_pressed:
 
 	push "L"
 	call _is_key_pressed
 	add esp, 4
 	test eax, eax
-	jz .point_not_pressed
+	jz .l_not_pressed
 	mov eax, [frame_count]
 	sub eax, 2
 	cmp dword [current_frame], eax
-	jge .point_not_pressed
+	jge .l_not_pressed
 	inc dword [current_frame]
-.point_not_pressed:
+.l_not_pressed:
 
 	sub esp, 8
 	lea eax, [esp + 4]
@@ -286,14 +304,18 @@ _redraw:
 	sub esp, 4
 	movss [esp], xmm0
 
-	test byte [state], 0x2
-	jz .frame
+	cmp byte [state], 0x3
+	jne .frame
 	mov eax, [estimated_frames]
 	jmp .estimated_frame
 .frame:
 	mov eax, [frames]
 .estimated_frame:
 	mov ecx, [current_frame]
+	cmp byte [state], 0x2
+	jne .not_next
+	inc ecx
+.not_next:
 	push dword [eax + ecx * 4]
 	call _scale_bitmap
 	add esp, 4
@@ -310,7 +332,7 @@ _redraw:
 	call _draw_bitmap
 	add esp, 4
 
-	test byte [state], 0x1
+	test byte [vectors], 0x1
 	jz .skip_vectors
 
 	mov esi, 4
@@ -488,4 +510,12 @@ _build_estimation:
 	pop edi
 	pop esi
 	pop ebx
+	ret
+
+_build_difference:
+	mov eax, [esp + 4]
+	push dword [eax + 8]
+	push dword [eax + 4]
+	call _create_image
+
 	ret
