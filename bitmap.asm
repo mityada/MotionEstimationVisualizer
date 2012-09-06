@@ -512,7 +512,7 @@ _get_pixel:
 
 	cmp word [ecx + 14], 8
 	jne .not_8bpp
-	shr eax, 8
+	shl eax, 16
 	and eax, 0x00ff0000
 	mov edx, eax
 	shr edx, 8

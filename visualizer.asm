@@ -516,6 +516,6 @@ _build_difference:
 	mov eax, [esp + 4]
 	push dword [eax + 8]
 	push dword [eax + 4]
-	call _create_image
+	call _create_bitmap
 
 	ret
